@@ -24,7 +24,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Supabase JS Client -->
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -357,171 +357,14 @@
 
     <!-- JavaScript Application Logic -->
     <script>
-        const SUPABASE_URL = "https://wwmaimwwthgnrenphvzh.supabase.co";
-        const SUPABASE_ANON_KEY = "sb_publishable_Zt-gkMUe4-VXXX7Kk9bQGw_BIQ0--Wg";
-
-        // Fault-tolerant Supabase Initialization
-        let supabaseClient = null;
-        try {
-            if (window.supabase && typeof window.supabase.createClient === 'function') {
-                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            }
-        } catch (e) {
-            console.warn("Supabase CDN client initialization failed:", e);
-        }
-
+        // GLOBAL STATE & UI FUNCTIONS REGISTERED IMMEDIATELY
         const MASTER_ADMIN_KEY = "dlpu2026";
-
         let isAdmin = false;
         let activeDetailItemId = null;
         let pendingPinAction = null;
         let items = [];
-
-        // Fetch items directly from Supabase DB with local fallback
-        async function fetchItems() {
-            if (!supabaseClient) {
-                filterItems();
-                return;
-            }
-
-            try {
-                const { data, error } = await supabaseClient
-                    .from('items')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-
-                if (error) {
-                    console.error("Error fetching items:", error);
-                    filterItems();
-                    return;
-                }
-
-                if (data) {
-                    items = data;
-                }
-                filterItems();
-            } catch (err) {
-                console.error("Network exception fetching items:", err);
-                filterItems();
-            }
-        }
-
-        function toggleAdminMode() {
-            if (!isAdmin) {
-                const inputKey = prompt("Enter Master Admin Key:");
-                if (inputKey !== MASTER_ADMIN_KEY) {
-                    showToast("Invalid Admin Key!");
-                    return;
-                }
-            }
-            
-            isAdmin = !isAdmin;
-            const btn = document.getElementById('adminToggleBtn');
-            const banner = document.getElementById('adminBanner');
-
-            if (isAdmin) {
-                btn.className = "w-10 h-10 rounded-2xl flex items-center justify-center bg-red-600 text-white transition shadow-xs";
-                banner.classList.remove('hidden');
-                showToast('Admin Mode Enabled! PIN checks bypassed.');
-            } else {
-                btn.className = "w-10 h-10 rounded-2xl flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition shadow-xs";
-                banner.classList.add('hidden');
-                showToast('Admin Mode Disabled');
-            }
-            filterItems();
-        }
-
-        function requestPinVerification(action, itemId) {
-            if (isAdmin) {
-                executeAction(action, itemId);
-                return;
-            }
-
-            pendingPinAction = { action, itemId };
-            document.getElementById('pinInput').value = '';
-            openModal('pinModal');
-        }
-
-        function verifyAndExecutePin() {
-            if (!pendingPinAction) return;
-
-            const inputPin = document.getElementById('pinInput').value.trim();
-            const targetItem = items.find(i => i.id === pendingPinAction.itemId);
-
-            if (!targetItem) {
-                showToast('Item not found');
-                closeModal('pinModal');
-                return;
-            }
-
-            if (inputPin === targetItem.pin) {
-                executeAction(pendingPinAction.action, pendingPinAction.itemId);
-                closeModal('pinModal');
-                pendingPinAction = null;
-            } else {
-                showToast('Incorrect PIN! Please try again.');
-                document.getElementById('pinInput').value = '';
-            }
-        }
-
-        async function executeAction(action, itemId) {
-            if (action === 'delete') {
-                if (supabaseClient) {
-                    const { error } = await supabaseClient
-                        .from('items')
-                        .delete()
-                        .eq('id', itemId);
-
-                    if (error) {
-                        showToast('Failed to delete item from database');
-                        console.error(error);
-                        return;
-                    }
-                } else {
-                    items = items.filter(i => i.id !== itemId);
-                }
-
-                closeModal('detailModal');
-                showToast('Listing deleted successfully!');
-                await fetchItems();
-            } else if (action === 'toggleSold') {
-                const targetItem = items.find(i => i.id === itemId);
-                if (!targetItem) return;
-
-                const newStatus = targetItem.status === 'sold' ? 'available' : 'sold';
-
-                if (supabaseClient) {
-                    const { error } = await supabaseClient
-                        .from('items')
-                        .update({ status: newStatus })
-                        .eq('id', itemId);
-
-                    if (error) {
-                        showToast('Failed to update status in database');
-                        console.error(error);
-                        return;
-                    }
-                } else {
-                    targetItem.status = newStatus;
-                }
-
-                showToast(newStatus === 'sold' ? 'Item marked as SOLD' : 'Item marked as Available');
-                await fetchItems();
-                if (activeDetailItemId === itemId) {
-                    openItemDetail(itemId);
-                }
-            }
-        }
-
-        function triggerDeleteWithPin(id) {
-            const targetId = id || activeDetailItemId;
-            if (targetId) requestPinVerification('delete', targetId);
-        }
-
-        function triggerSoldStatusWithPin(id) {
-            const targetId = id || activeDetailItemId;
-            if (targetId) requestPinVerification('toggleSold', targetId);
-        }
+        let activeCategory = 'All';
+        let savedItemIds = JSON.parse(localStorage.getItem('dlpu_saved_items')) || [];
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
@@ -532,28 +375,15 @@
             }, 3000);
         }
 
-        function copyWeChatID() {
-            const wechatId = document.getElementById('modalWeChat').innerText;
-            if (!wechatId || wechatId.includes('No ID provided')) {
-                showToast('No WeChat ID available');
-                return;
-            }
-            navigator.clipboard.writeText(wechatId);
-            showToast(`Copied "${wechatId}" to clipboard!`);
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
         }
 
-        function openWeChatApp() {
-            const wechatId = document.getElementById('modalWeChat').innerText;
-            if (wechatId && !wechatId.includes('No ID provided')) {
-                navigator.clipboard.writeText(wechatId);
-                showToast(`Copied ID! Opening WeChat...`);
-            } else {
-                showToast(`Scan QR Code in WeChat!`);
-            }
-
-            setTimeout(() => {
-                window.location.href = "weixin://";
-            }, 500);
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+            document.body.style.overflow = '';
+            if (modalId === 'detailModal') activeDetailItemId = null;
         }
 
         function toggleTheme() {
@@ -563,34 +393,22 @@
             if (html.classList.contains('dark')) {
                 html.classList.remove('dark');
                 localStorage.setItem('theme', 'light');
-                icon.className = "fa-solid fa-moon text-base";
+                if (icon) icon.className = "fa-solid fa-moon text-base";
             } else {
                 html.classList.add('dark');
                 localStorage.setItem('theme', 'dark');
-                icon.className = "fa-solid fa-sun text-base";
+                if (icon) icon.className = "fa-solid fa-sun text-base";
             }
         }
-
-        (function initTheme() {
-            const savedTheme = localStorage.getItem('theme');
-            
-            if (savedTheme === 'light') {
-                document.documentElement.classList.remove('dark');
-                document.getElementById('themeIcon').className = "fa-solid fa-moon text-base";
-            } else {
-                document.documentElement.classList.add('dark');
-                document.getElementById('themeIcon').className = "fa-solid fa-sun text-base";
-            }
-        })();
 
         function scrollToMarket() {
-            document.getElementById('marketplace').scrollIntoView({ behavior: 'smooth' });
+            const market = document.getElementById('marketplace');
+            if (market) market.scrollIntoView({ behavior: 'smooth' });
         }
-
-        let savedItemIds = JSON.parse(localStorage.getItem('dlpu_saved_items')) || [];
 
         function updateFavBadge() {
             const badge = document.getElementById('favBadge');
+            if (!badge) return;
             if (savedItemIds.length > 0) {
                 badge.innerText = savedItemIds.length;
                 badge.classList.remove('hidden');
@@ -600,7 +418,7 @@
         }
 
         function toggleFavorite(id, event) {
-            event.stopPropagation();
+            if (event) event.stopPropagation();
             if (savedItemIds.includes(id)) {
                 savedItemIds = savedItemIds.filter(itemId => itemId !== id);
                 showToast('Removed from saved items');
@@ -618,10 +436,60 @@
             filterCategory('Saved');
         }
 
-        let activeCategory = 'All';
+        function filterCategory(category) {
+            activeCategory = category;
+            
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                if (btn.innerText.includes(category) || (category === 'All' && btn.innerText.includes('All'))) {
+                    btn.className = "cat-btn bg-lime-400 text-slate-950 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold whitespace-nowrap shadow-xs flex-shrink-0 transition-colors";
+                } else {
+                    btn.className = "cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors";
+                }
+            });
+
+            filterItems();
+        }
+
+        function clearSearch() {
+            const input = document.getElementById('searchInput');
+            if (input) input.value = '';
+            const btn = document.getElementById('clearSearchBtn');
+            if (btn) btn.classList.add('hidden');
+            filterItems();
+        }
+
+        function filterItems() {
+            const queryInput = document.getElementById('searchInput');
+            const query = queryInput ? queryInput.value.toLowerCase() : '';
+            const clearBtn = document.getElementById('clearSearchBtn');
+            
+            if (clearBtn) {
+                if (query.length > 0) clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
+
+            const filtered = items.filter(item => {
+                let matchesCategory = true;
+                if (activeCategory === 'Saved') {
+                    matchesCategory = savedItemIds.includes(item.id);
+                } else if (activeCategory === 'Under50') {
+                    matchesCategory = item.price <= 50;
+                } else if (activeCategory !== 'All') {
+                    matchesCategory = item.category === activeCategory;
+                }
+
+                const matchesQuery = (item.title && item.title.toLowerCase().includes(query)) || 
+                                     (item.desc && item.desc.toLowerCase().includes(query)) || 
+                                     (item.location && item.location.toLowerCase().includes(query));
+                return matchesCategory && matchesQuery;
+            });
+
+            renderItems(filtered);
+        }
 
         function renderItems(itemsToRender) {
             const grid = document.getElementById('productGrid');
+            if (!grid) return;
             grid.innerHTML = '';
 
             if (itemsToRender.length === 0) {
@@ -684,53 +552,6 @@
             });
         }
 
-        function filterCategory(category) {
-            activeCategory = category;
-            
-            document.querySelectorAll('.cat-btn').forEach(btn => {
-                if (btn.innerText.includes(category) || (category === 'All' && btn.innerText.includes('All'))) {
-                    btn.className = "cat-btn bg-lime-400 text-slate-950 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold whitespace-nowrap shadow-xs flex-shrink-0 transition-colors";
-                } else {
-                    btn.className = "cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors";
-                }
-            });
-
-            filterItems();
-        }
-
-        function clearSearch() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('clearSearchBtn').classList.add('hidden');
-            filterItems();
-        }
-
-        function filterItems() {
-            const queryInput = document.getElementById('searchInput');
-            const query = queryInput.value.toLowerCase();
-            
-            if (query.length > 0) {
-                document.getElementById('clearSearchBtn').classList.remove('hidden');
-            } else {
-                document.getElementById('clearSearchBtn').classList.add('hidden');
-            }
-
-            const filtered = items.filter(item => {
-                let matchesCategory = true;
-                if (activeCategory === 'Saved') {
-                    matchesCategory = savedItemIds.includes(item.id);
-                } else if (activeCategory === 'Under50') {
-                    matchesCategory = item.price <= 50;
-                } else if (activeCategory !== 'All') {
-                    matchesCategory = item.category === activeCategory;
-                }
-
-                const matchesQuery = item.title.toLowerCase().includes(query) || (item.desc && item.desc.toLowerCase().includes(query)) || (item.location && item.location.toLowerCase().includes(query));
-                return matchesCategory && matchesQuery;
-            });
-
-            renderItems(filtered);
-        }
-
         function openItemDetail(id) {
             const item = items.find(i => i.id === id);
             if (!item) return;
@@ -775,15 +596,165 @@
             openModal('detailModal');
         }
 
-        function openModal(modalId) {
-            document.getElementById(modalId).classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
+        function toggleAdminMode() {
+            if (!isAdmin) {
+                const inputKey = prompt("Enter Master Admin Key:");
+                if (inputKey !== MASTER_ADMIN_KEY) {
+                    showToast("Invalid Admin Key!");
+                    return;
+                }
+            }
+            
+            isAdmin = !isAdmin;
+            const btn = document.getElementById('adminToggleBtn');
+            const banner = document.getElementById('adminBanner');
+
+            if (isAdmin) {
+                btn.className = "w-10 h-10 rounded-2xl flex items-center justify-center bg-red-600 text-white transition shadow-xs";
+                banner.classList.remove('hidden');
+                showToast('Admin Mode Enabled! PIN checks bypassed.');
+            } else {
+                btn.className = "w-10 h-10 rounded-2xl flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition shadow-xs";
+                banner.classList.add('hidden');
+                showToast('Admin Mode Disabled');
+            }
+            filterItems();
         }
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.add('hidden');
-            document.body.style.overflow = '';
-            if (modalId === 'detailModal') activeDetailItemId = null;
+        function requestPinVerification(action, itemId) {
+            if (isAdmin) {
+                executeAction(action, itemId);
+                return;
+            }
+
+            pendingPinAction = { action, itemId };
+            document.getElementById('pinInput').value = '';
+            openModal('pinModal');
+        }
+
+        function verifyAndExecutePin() {
+            if (!pendingPinAction) return;
+
+            const inputPin = document.getElementById('pinInput').value.trim();
+            const targetItem = items.find(i => i.id === pendingPinAction.itemId);
+
+            if (!targetItem) {
+                showToast('Item not found');
+                closeModal('pinModal');
+                return;
+            }
+
+            if (inputPin === targetItem.pin) {
+                executeAction(pendingPinAction.action, pendingPinAction.itemId);
+                closeModal('pinModal');
+                pendingPinAction = null;
+            } else {
+                showToast('Incorrect PIN! Please try again.');
+                document.getElementById('pinInput').value = '';
+            }
+        }
+
+        function triggerDeleteWithPin(id) {
+            const targetId = id || activeDetailItemId;
+            if (targetId) requestPinVerification('delete', targetId);
+        }
+
+        function triggerSoldStatusWithPin(id) {
+            const targetId = id || activeDetailItemId;
+            if (targetId) requestPinVerification('toggleSold', targetId);
+        }
+
+        function copyWeChatID() {
+            const wechatId = document.getElementById('modalWeChat').innerText;
+            if (!wechatId || wechatId.includes('No ID provided')) {
+                showToast('No WeChat ID available');
+                return;
+            }
+            navigator.clipboard.writeText(wechatId);
+            showToast(`Copied "${wechatId}" to clipboard!`);
+        }
+
+        function openWeChatApp() {
+            const wechatId = document.getElementById('modalWeChat').innerText;
+            if (wechatId && !wechatId.includes('No ID provided')) {
+                navigator.clipboard.writeText(wechatId);
+                showToast(`Copied ID! Opening WeChat...`);
+            } else {
+                showToast(`Scan QR Code in WeChat!`);
+            }
+
+            setTimeout(() => {
+                window.location.href = "weixin://";
+            }, 500);
+        }
+
+        // SUPABASE BACKEND INTEGRATION
+        const SUPABASE_URL = "https://wwmaimwwthgnrenphvzh.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_Zt-gkMUe4-VXXX7Kk9bQGw_BIQ0--Wg";
+        let supabaseClient = null;
+
+        try {
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (e) {
+            console.warn("Supabase CDN initialization bypassed:", e);
+        }
+
+        async function fetchItems() {
+            if (!supabaseClient) {
+                filterItems();
+                return;
+            }
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('items')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (!error && data) {
+                    items = data;
+                }
+            } catch (err) {
+                console.warn("Fetch exception:", err);
+            }
+            filterItems();
+        }
+
+        async function executeAction(action, itemId) {
+            if (action === 'delete') {
+                if (supabaseClient) {
+                    const { error } = await supabaseClient.from('items').delete().eq('id', itemId);
+                    if (error) {
+                        showToast('Failed to delete item from database');
+                        return;
+                    }
+                }
+                items = items.filter(i => i.id !== itemId);
+                closeModal('detailModal');
+                showToast('Listing deleted successfully!');
+                await fetchItems();
+            } else if (action === 'toggleSold') {
+                const targetItem = items.find(i => i.id === itemId);
+                if (!targetItem) return;
+
+                const newStatus = targetItem.status === 'sold' ? 'available' : 'sold';
+
+                if (supabaseClient) {
+                    const { error } = await supabaseClient.from('items').update({ status: newStatus }).eq('id', itemId);
+                    if (error) {
+                        showToast('Failed to update status');
+                        return;
+                    }
+                }
+                targetItem.status = newStatus;
+                showToast(newStatus === 'sold' ? 'Item marked as SOLD' : 'Item marked as Available');
+                await fetchItems();
+                if (activeDetailItemId === itemId) {
+                    openItemDetail(itemId);
+                }
+            }
         }
 
         async function handlePostItem(event) {
@@ -822,7 +793,6 @@
             }
 
             const newItem = {
-                id: Date.now(),
                 title: document.getElementById('postTitle').value,
                 price: parseFloat(document.getElementById('postPrice').value),
                 category: document.getElementById('postCategory').value,
@@ -840,10 +810,10 @@
                 const { error } = await supabaseClient.from('items').insert([newItem]);
                 if (error) {
                     showToast('Error saving to live database');
-                    console.error(error);
                     return;
                 }
             } else {
+                newItem.id = Date.now();
                 items.unshift(newItem);
             }
 
@@ -854,7 +824,20 @@
             scrollToMarket();
         }
 
-        // Initial Render & Fetch
+        // INITIAL PAGE RUN
+        (function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') {
+                document.documentElement.classList.remove('dark');
+                const icon = document.getElementById('themeIcon');
+                if (icon) icon.className = "fa-solid fa-moon text-base";
+            } else {
+                document.documentElement.classList.add('dark');
+                const icon = document.getElementById('themeIcon');
+                if (icon) icon.className = "fa-solid fa-sun text-base";
+            }
+        })();
+
         updateFavBadge();
         fetchItems();
     </script>
