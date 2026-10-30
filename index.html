@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DLPU International Marketplace</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        limeaccent: '#84cc16',
+                        limebright: '#a3e635',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Font (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-slate-950 text-gray-800 dark:text-gray-100 min-h-screen flex flex-col justify-between transition-colors duration-300">
+
+    <!-- Toast Notification Container -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white dark:bg-lime-400 dark:text-slate-950 font-bold px-5 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 pointer-events-none">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-lime-400 dark:text-slate-950"></i>
+        <span id="toastMessage" class="text-xs sm:text-sm">Action successful</span>
+    </div>
+
+    <!-- Sticky Navbar -->
+    <header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-slate-800 sticky top-0 z-40 transition-colors duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+                <div class="bg-lime-400 text-slate-950 p-2.5 rounded-2xl shadow-md font-black">
+                    <i class="fa-solid fa-store text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg text-gray-900 dark:text-white leading-tight">DLPU Marketplace</h1>
+                    <p class="text-[10px] text-lime-600 dark:text-lime-400 font-bold tracking-wide uppercase">Dalian Polytechnic</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <!-- Admin Mode Toggle Button -->
+                <button onclick="toggleAdminMode()" id="adminToggleBtn" title="Toggle Admin Mode" class="w-10 h-10 rounded-2xl flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition shadow-xs">
+                    <i id="adminIcon" class="fa-solid fa-user-shield text-sm"></i>
+                </button>
+
+                <!-- Favorites Quick Toggle -->
+                <button onclick="toggleSavedFilter()" id="savedFilterBtn" aria-label="View saved items" class="w-10 h-10 rounded-2xl flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition shadow-xs relative">
+                    <i class="fa-solid fa-heart text-sm"></i>
+                    <span id="favBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
+                </button>
+
+                <!-- Theme Toggle Button -->
+                <button onclick="toggleTheme()" id="themeBtn" aria-label="Toggle dark mode" class="w-10 h-10 rounded-2xl flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-lime-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition shadow-xs">
+                    <i id="themeIcon" class="fa-solid fa-moon text-base"></i>
+                </button>
+
+                <!-- Post Item Button -->
+                <button onclick="openModal('postModal')" class="bg-lime-400 hover:bg-lime-500 text-slate-950 active:scale-95 text-sm font-bold px-4 py-2.5 rounded-2xl transition shadow-md flex items-center space-x-2">
+                    <i class="fa-solid fa-plus"></i>
+                    <span class="hidden sm:inline">Post Listing</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Admin Status Indicator Banner -->
+    <div id="adminBanner" class="bg-red-600 text-white text-xs font-bold py-1.5 px-4 text-center hidden">
+        <i class="fa-solid fa-shield-halved mr-1.5"></i> Admin Mode Enabled — Full deletion & status override active without PIN prompt.
+    </div>
+
+    <!-- Main Content -->
+    <main class="w-full flex-grow">
+        
+        <!-- Hero Section -->
+        <section class="relative min-h-[80vh] flex flex-col justify-between p-6 sm:p-12 lg:p-16 mb-10 overflow-hidden bg-gradient-to-br from-lime-100 via-emerald-50 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-slate-900 dark:text-white border-b border-gray-200 dark:border-slate-800 transition-colors duration-300">
+            <div class="absolute -top-32 -left-32 w-[500px] h-[500px] bg-lime-400/30 dark:bg-lime-500/20 rounded-full blur-[120px] pointer-events-none"></div>
+            <div class="absolute -bottom-32 -right-32 w-[500px] h-[500px] bg-emerald-400/30 dark:bg-emerald-500/20 rounded-full blur-[120px] pointer-events-none"></div>
+            
+            <div class="relative z-10 max-w-7xl mx-auto w-full pt-4">
+                <span class="inline-flex items-center space-x-2 bg-white/80 dark:bg-slate-900/90 border border-lime-500/40 dark:border-lime-400/30 text-lime-700 dark:text-lime-400 text-xs font-bold px-4 py-2 rounded-full shadow-xs backdrop-blur-md">
+                    <span class="w-2.5 h-2.5 rounded-full bg-lime-500 dark:bg-lime-400 animate-ping"></span>
+                    <span>DLPU International Student Network</span>
+                </span>
+            </div>
+
+            <div class="relative z-10 max-w-3xl mx-auto text-center my-auto py-8">
+                <h2 class="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-none mb-6 text-slate-900 dark:text-white">
+                    Campus Trading, <br/>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-lime-600 via-emerald-600 to-teal-600 dark:from-lime-400 dark:via-lime-300 dark:to-emerald-400">Reimagined.</span>
+                </h2>
+                <p class="text-gray-600 dark:text-gray-300 text-base sm:text-xl mb-10 max-w-xl mx-auto leading-relaxed font-medium">
+                    Buy and sell dorm gear, HSK books, electric kettles, and study lamps seamlessly across Dalian Polytechnic University.
+                </p>
+
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto">
+                    <button onclick="scrollToMarket()" class="w-full sm:w-auto bg-lime-400 hover:bg-lime-500 dark:hover:bg-lime-300 text-slate-950 active:scale-95 font-extrabold px-8 py-4 rounded-2xl shadow-xl shadow-lime-500/20 transition text-sm sm:text-base flex items-center justify-center space-x-2">
+                        <span>Explore Listings</span>
+                        <i class="fa-solid fa-arrow-down text-xs"></i>
+                    </button>
+                    <button onclick="openModal('postModal')" class="w-full sm:w-auto bg-white dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold px-8 py-4 rounded-2xl transition text-sm sm:text-base flex items-center justify-center space-x-2 shadow-xs">
+                        <i class="fa-solid fa-camera text-lime-600 dark:text-lime-400"></i>
+                        <span>Sell Something</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="relative z-10 max-w-5xl mx-auto w-full pt-6 border-t border-gray-200 dark:border-slate-800/80 grid grid-cols-3 gap-2 text-center">
+                <div>
+                    <p class="text-2xl sm:text-4xl font-black text-lime-600 dark:text-lime-400">100%</p>
+                    <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-semibold">Campus Verified</p>
+                </div>
+                <div>
+                    <p class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">Direct</p>
+                    <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-semibold">WeChat Contact</p>
+                </div>
+                <div>
+                    <p class="text-2xl sm:text-4xl font-black text-lime-600 dark:text-lime-400">¥0</p>
+                    <p class="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-semibold">Trading Fees</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Marketplace Container -->
+        <div id="marketplace" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+            
+            <div class="mb-6 sticky top-[72px] z-20 bg-gray-50/95 dark:bg-slate-950/95 backdrop-blur-md py-3 transition-colors duration-300">
+                <div class="relative mb-3">
+                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                        <i class="fa-solid fa-search"></i>
+                    </span>
+                    <input type="text" id="searchInput" onkeyup="filterItems()" placeholder="Search kettles, HSK books, dorm fridges..." 
+                        class="w-full pl-11 pr-10 py-3.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-lime-400 text-gray-900 dark:text-white placeholder-gray-400 shadow-sm transition-colors">
+                    <button onclick="clearSearch()" id="clearSearchBtn" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hidden">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="flex overflow-x-auto pb-1 space-x-2 no-scrollbar">
+                    <button onclick="filterCategory('All')" class="cat-btn bg-lime-400 text-slate-950 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold whitespace-nowrap shadow-xs flex-shrink-0">All Items</button>
+                    <button onclick="filterCategory('Saved')" class="cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors flex items-center space-x-1.5">
+                        <i class="fa-solid fa-heart text-red-500"></i>
+                        <span>Saved</span>
+                    </button>
+                    <button onclick="filterCategory('Under50')" class="cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors">Under ¥50</button>
+                    <button onclick="filterCategory('Textbooks')" class="cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors">Textbooks</button>
+                    <button onclick="filterCategory('Electronics')" class="cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors">Electronics</button>
+                    <button onclick="filterCategory('Furniture')" class="cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors">Furniture</button>
+                    <button onclick="filterCategory('Kitchen')" class="cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors">Kitchen</button>
+                    <button onclick="filterCategory('Transport')" class="cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors">Transport</button>
+                </div>
+            </div>
+
+            <!-- Product Grid -->
+            <div id="productGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                <!-- Dynamically populated via JavaScript -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 py-6 text-center text-xs text-gray-500 dark:text-gray-400 transition-colors">
+        <p>&copy; 2026 DLPU International Student Marketplace. Built for smooth campus trading.</p>
+    </footer>
+
+    <!-- PIN Verification Modal -->
+    <div id="pinModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-xs overflow-hidden shadow-2xl p-6 text-center border border-gray-100 dark:border-slate-800">
+            <div class="w-12 h-12 bg-lime-400/20 text-lime-600 dark:text-lime-400 rounded-2xl flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+                <i class="fa-solid fa-key"></i>
+            </div>
+            <h3 class="font-bold text-lg text-gray-900 dark:text-white mb-1">Enter Seller PIN</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Provide the 4-digit PIN created when this item was listed.</p>
+            <input type="password" id="pinInput" maxlength="4" pattern="\d{4}" placeholder="• • • •" class="w-full px-4 py-3 bg-gray-100 dark:bg-slate-800 text-center font-mono text-xl font-bold tracking-widest text-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-slate-700 focus:ring-2 focus:ring-lime-400 focus:outline-none mb-4">
+            <div class="flex space-x-2">
+                <button onclick="closeModal('pinModal')" class="w-1/2 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition">Cancel</button>
+                <button onclick="verifyAndExecutePin()" class="w-1/2 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-500 text-slate-950 text-xs font-extrabold shadow-md transition">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Item Detail Modal -->
+    <div id="detailModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl max-h-[92vh] flex flex-col transition-colors border border-gray-100 dark:border-slate-800 relative">
+            
+            <div class="w-full flex justify-center pt-3 pb-1 sm:hidden bg-white dark:bg-slate-900 absolute z-10 rounded-t-3xl">
+                <div class="w-12 h-1.5 bg-gray-300 dark:bg-slate-700 rounded-full"></div>
+            </div>
+
+            <div class="relative h-52 sm:h-64 bg-gray-100 dark:bg-slate-950 flex-shrink-0">
+                <img id="modalImg" src="" alt="Item image" class="w-full h-full object-cover">
+                <button onclick="closeModal('detailModal')" class="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white w-8 h-8 rounded-full flex items-center justify-center transition backdrop-blur-md z-20">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                
+                <div id="modalSoldOverlay" class="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center hidden z-10">
+                    <span class="bg-red-600 text-white font-black text-2xl tracking-widest px-6 py-2 rounded-2xl rotate-[-12deg] shadow-2xl border-2 border-white">SOLD</span>
+                </div>
+
+                <div class="absolute bottom-4 left-4 flex items-center space-x-2 z-20">
+                    <span id="modalCategory" class="bg-lime-400 text-slate-950 text-xs px-3.5 py-1.5 rounded-full font-extrabold shadow-md"></span>
+                    <span id="modalCondition" class="bg-slate-900/90 text-white text-xs px-3 py-1.5 rounded-full font-semibold backdrop-blur-md border border-white/20"></span>
+                </div>
+            </div>
+            
+            <div class="p-5 sm:p-6 overflow-y-auto space-y-4">
+                <div class="flex justify-between items-start">
+                    <h3 id="modalTitle" class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white leading-tight pr-4"></h3>
+                    <span id="modalPrice" class="text-xl sm:text-2xl font-black text-lime-600 dark:text-lime-400 whitespace-nowrap"></span>
+                </div>
+                
+                <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 flex items-center">
+                    <i class="fa-solid fa-location-dot mr-1.5 text-red-500"></i> <span id="modalLocationText"></span>
+                </p>
+                
+                <p id="modalDesc" class="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 leading-relaxed"></p>
+
+                <!-- Seller Management Controls -->
+                <div class="flex items-center justify-between bg-gray-100 dark:bg-slate-800/80 p-3 rounded-2xl">
+                    <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Seller Options</span>
+                    <div class="flex space-x-2">
+                        <button onclick="triggerSoldStatusWithPin()" id="toggleSoldBtn" class="bg-slate-900 dark:bg-slate-950 text-white hover:bg-slate-800 text-xs font-bold px-3 py-2 rounded-xl transition">
+                            Mark as Sold
+                        </button>
+                        <button onclick="triggerDeleteWithPin()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Contact Section -->
+                <div id="modalContactBox" class="bg-slate-900 dark:bg-slate-950 text-white p-4 rounded-2xl border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[10px] text-lime-400 uppercase font-extrabold tracking-wider">Seller WeChat Contact</p>
+                            <p id="modalWeChat" class="text-sm font-bold text-white"></p>
+                        </div>
+                        <button onclick="copyWeChatID()" id="copyIdBtn" class="bg-slate-800 hover:bg-slate-700 text-xs text-lime-400 px-3 py-1.5 rounded-xl transition font-semibold">
+                            Copy ID
+                        </button>
+                    </div>
+
+                    <div id="qrContainer" class="hidden pt-2 border-t border-slate-800 flex flex-col items-center text-center">
+                        <p class="text-xs text-gray-400 mb-2">Scan WeChat QR Code below:</p>
+                        <div class="bg-white p-2 rounded-2xl shadow-lg inline-block">
+                            <img id="modalQrImg" src="" alt="Seller WeChat QR Code" class="w-36 h-36 object-contain rounded-xl">
+                        </div>
+                    </div>
+
+                    <button onclick="openWeChatApp()" id="openWechatBtn" class="w-full bg-[#07C160] hover:bg-[#06ad56] active:scale-95 text-white text-sm font-bold py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-md">
+                        <i class="fa-brands fa-weixin text-lg"></i>
+                        <span>Open in WeChat</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Post Item Modal -->
+    <div id="postModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full max-w-md overflow-hidden shadow-2xl max-h-[90vh] flex flex-col transition-colors border border-gray-100 dark:border-slate-800">
+            
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
+                <h3 class="font-bold text-lg text-gray-900 dark:text-white">Post an Item for Sale</h3>
+                <button onclick="closeModal('postModal')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-gray-100 dark:bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <form id="postForm" onsubmit="handlePostItem(event)" class="p-6 space-y-4 overflow-y-auto">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Item Title</label>
+                    <input type="text" id="postTitle" required placeholder="e.g., Mini Refrigerator / HSK 4 Book" class="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-lime-400 focus:outline-none transition-colors">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Price (RMB ¥)</label>
+                        <input type="number" id="postPrice" required placeholder="50" class="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-lime-400 focus:outline-none transition-colors">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Category</label>
+                        <select id="postCategory" class="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-lime-400 focus:outline-none transition-colors">
+                            <option value="Textbooks">Textbooks</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Furniture">Furniture</option>
+                            <option value="Kitchen">Kitchen</option>
+                            <option value="Transport">Transport</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Condition</label>
+                        <select id="postCondition" class="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-lime-400 focus:outline-none transition-colors">
+                            <option value="Like New">Like New</option>
+                            <option value="Good">Good</option>
+                            <option value="Fair">Fair</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Building / Dorm</label>
+                        <input type="text" id="postLocation" required placeholder="e.g., Building 2" class="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-lime-400 focus:outline-none transition-colors">
+                    </div>
+                </div>
+
+                <!-- 4-Digit Security PIN -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Create 4-Digit Management PIN *</label>
+                    <input type="password" id="postPin" maxlength="4" pattern="\d{4}" required placeholder="1234" class="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white rounded-xl text-sm font-mono tracking-widest focus:ring-2 focus:ring-lime-400 focus:outline-none transition-colors">
+                    <p class="text-[10px] text-gray-400 mt-1">Keep this 4-digit PIN safe! You'll need it to mark this item as sold or delete it.</p>
+                </div>
+                
+                <!-- File Upload for Item Photo -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">Upload Item Photo *</label>
+                    <input type="file" id="postImgFile" accept="image/*" required class="w-full text-xs text-gray-500 dark:text-gray-400 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-lime-400 file:text-slate-950 hover:file:bg-lime-500 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 focus:outline-none cursor-pointer">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                    <textarea id="postDesc" rows="2" required placeholder="Mention usage time, defects, reasons for selling..." class="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-lime-400 focus:outline-none transition-colors"></textarea>
+                </div>
+
+                <!-- WeChat Contact Fields -->
+                <div class="bg-gray-50 dark:bg-slate-800/50 p-3.5 rounded-2xl border border-gray-200 dark:border-slate-700/80 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-extrabold text-gray-900 dark:text-white">WeChat Contact Info</label>
+                        <span class="text-[10px] text-lime-600 dark:text-lime-400 font-bold">*At least 1 required</span>
+                    </div>
+                    <div>
+                        <input type="text" id="postWeChat" placeholder="WeChat ID (e.g. alex_dlpu)" class="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white rounded-xl text-xs focus:ring-2 focus:ring-lime-400 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Upload WeChat QR Code Photo</label>
+                        <input type="file" id="postWeChatQrFile" accept="image/*" class="w-full text-xs text-gray-500 dark:text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-200 dark:file:bg-slate-700 file:text-slate-800 dark:file:text-white border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 focus:outline-none cursor-pointer">
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-lime-400 hover:bg-lime-500 text-slate-950 font-extrabold py-3.5 rounded-xl transition text-sm shadow-md mt-2">Publish Listing</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Pre-filled Supabase Live Credentials
+        const SUPABASE_URL = "https://wwmaimwwthgnrenphvzh.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_Zt-gkMUe4-VXXX7Kk9bQGw_BIQ0--Wg";
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const MASTER_ADMIN_KEY = "dlpu2026";
+
+        let isAdmin = false;
+        let activeDetailItemId = null;
+        let pendingPinAction = null;
+        let items = [];
+
+        // Fetch live items directly from Supabase DB
+        async function fetchItems() {
+            const { data, error } = await supabase
+                .from('items')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error fetching items:", error);
+                showToast("Could not load live listings");
+                return;
+            }
+
+            items = data || [];
+            filterItems();
+        }
+
+        function toggleAdminMode() {
+            if (!isAdmin) {
+                const inputKey = prompt("Enter Master Admin Key:");
+                if (inputKey !== MASTER_ADMIN_KEY) {
+                    showToast("Invalid Admin Key!");
+                    return;
+                }
+            }
+            
+            isAdmin = !isAdmin;
+            const btn = document.getElementById('adminToggleBtn');
+            const banner = document.getElementById('adminBanner');
+
+            if (isAdmin) {
+                btn.className = "w-10 h-10 rounded-2xl flex items-center justify-center bg-red-600 text-white transition shadow-xs";
+                banner.classList.remove('hidden');
+                showToast('Admin Mode Enabled! PIN checks bypassed.');
+            } else {
+                btn.className = "w-10 h-10 rounded-2xl flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition shadow-xs";
+                banner.classList.add('hidden');
+                showToast('Admin Mode Disabled');
+            }
+            filterItems();
+        }
+
+        function requestPinVerification(action, itemId) {
+            if (isAdmin) {
+                executeAction(action, itemId);
+                return;
+            }
+
+            pendingPinAction = { action, itemId };
+            document.getElementById('pinInput').value = '';
+            openModal('pinModal');
+        }
+
+        function verifyAndExecutePin() {
+            if (!pendingPinAction) return;
+
+            const inputPin = document.getElementById('pinInput').value.trim();
+            const targetItem = items.find(i => i.id === pendingPinAction.itemId);
+
+            if (!targetItem) {
+                showToast('Item not found');
+                closeModal('pinModal');
+                return;
+            }
+
+            if (inputPin === targetItem.pin) {
+                executeAction(pendingPinAction.action, pendingPinAction.itemId);
+                closeModal('pinModal');
+                pendingPinAction = null;
+            } else {
+                showToast('Incorrect PIN! Please try again.');
+                document.getElementById('pinInput').value = '';
+            }
+        }
+
+        async function executeAction(action, itemId) {
+            if (action === 'delete') {
+                const { error } = await supabase
+                    .from('items')
+                    .delete()
+                    .eq('id', itemId);
+
+                if (error) {
+                    showToast('Failed to delete item from database');
+                    console.error(error);
+                    return;
+                }
+
+                closeModal('detailModal');
+                showToast('Listing deleted live!');
+                await fetchItems();
+            } else if (action === 'toggleSold') {
+                const targetItem = items.find(i => i.id === itemId);
+                if (!targetItem) return;
+
+                const newStatus = targetItem.status === 'sold' ? 'available' : 'sold';
+
+                const { error } = await supabase
+                    .from('items')
+                    .update({ status: newStatus })
+                    .eq('id', itemId);
+
+                if (error) {
+                    showToast('Failed to update status in database');
+                    console.error(error);
+                    return;
+                }
+
+                showToast(newStatus === 'sold' ? 'Item marked as SOLD' : 'Item marked as Available');
+                await fetchItems();
+                if (activeDetailItemId === itemId) {
+                    openItemDetail(itemId);
+                }
+            }
+        }
+
+        function triggerDeleteWithPin(id) {
+            const targetId = id || activeDetailItemId;
+            if (targetId) requestPinVerification('delete', targetId);
+        }
+
+        function triggerSoldStatusWithPin(id) {
+            const targetId = id || activeDetailItemId;
+            if (targetId) requestPinVerification('toggleSold', targetId);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function copyWeChatID() {
+            const wechatId = document.getElementById('modalWeChat').innerText;
+            if (!wechatId || wechatId.includes('No ID provided')) {
+                showToast('No WeChat ID available');
+                return;
+            }
+            navigator.clipboard.writeText(wechatId);
+            showToast(`Copied "${wechatId}" to clipboard!`);
+        }
+
+        function openWeChatApp() {
+            const wechatId = document.getElementById('modalWeChat').innerText;
+            if (wechatId && !wechatId.includes('No ID provided')) {
+                navigator.clipboard.writeText(wechatId);
+                showToast(`Copied ID! Opening WeChat...`);
+            } else {
+                showToast(`Scan QR Code in WeChat!`);
+            }
+
+            setTimeout(() => {
+                window.location.href = "weixin://";
+            }, 500);
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('themeIcon');
+            
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                icon.className = "fa-solid fa-moon text-base";
+            } else {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                icon.className = "fa-solid fa-sun text-base";
+            }
+        }
+
+        (function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('themeIcon').className = "fa-solid fa-sun text-base";
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('themeIcon').className = "fa-solid fa-moon text-base";
+            }
+        })();
+
+        function scrollToMarket() {
+            document.getElementById('marketplace').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        let savedItemIds = JSON.parse(localStorage.getItem('dlpu_saved_items')) || [];
+
+        function updateFavBadge() {
+            const badge = document.getElementById('favBadge');
+            if (savedItemIds.length > 0) {
+                badge.innerText = savedItemIds.length;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function toggleFavorite(id, event) {
+            event.stopPropagation();
+            if (savedItemIds.includes(id)) {
+                savedItemIds = savedItemIds.filter(itemId => itemId !== id);
+                showToast('Removed from saved items');
+            } else {
+                savedItemIds.push(id);
+                showToast('Item saved to favorites!');
+            }
+            localStorage.setItem('dlpu_saved_items', JSON.stringify(savedItemIds));
+            updateFavBadge();
+            filterItems();
+        }
+
+        function toggleSavedFilter() {
+            scrollToMarket();
+            filterCategory('Saved');
+        }
+
+        let activeCategory = 'All';
+
+        function renderItems(itemsToRender) {
+            const grid = document.getElementById('productGrid');
+            grid.innerHTML = '';
+
+            if (itemsToRender.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full text-center py-12">
+                        <i class="fa-solid fa-box-open text-4xl text-gray-300 dark:text-slate-700 mb-3"></i>
+                        <p class="text-gray-500 dark:text-gray-400 text-sm">No items found matching your criteria.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            itemsToRender.forEach(item => {
+                const isFav = savedItemIds.includes(item.id);
+                const isSold = item.status === 'sold';
+                
+                const card = document.createElement('div');
+                card.className = `bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between group cursor-pointer relative ${isSold ? 'opacity-75' : ''}`;
+                card.onclick = () => openItemDetail(item.id);
+
+                card.innerHTML = `
+                    <div class="relative h-36 sm:h-48 bg-gray-100 dark:bg-slate-950 overflow-hidden">
+                        <img src="${item.image}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300 ${isSold ? 'grayscale' : ''}">
+                        
+                        ${isSold ? `
+                            <div class="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center">
+                                <span class="bg-red-600 text-white font-black text-xs sm:text-sm px-3 py-1 rounded-xl rotate-[-8deg] shadow-lg border border-white">SOLD</span>
+                            </div>
+                        ` : ''}
+
+                        <span class="absolute top-2 left-2 sm:top-3 sm:left-3 bg-slate-950/90 text-lime-400 text-[10px] font-extrabold px-2.5 py-1 rounded-md shadow-xs z-10">${item.category}</span>
+                        
+                        <div class="absolute top-2 right-2 sm:top-3 sm:right-3 flex space-x-1.5 z-10">
+                            ${isAdmin ? `
+                                <button onclick="event.stopPropagation(); triggerDeleteWithPin(${item.id})" title="Delete listing" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-md">
+                                    <i class="fa-solid fa-trash text-xs"></i>
+                                </button>
+                            ` : ''}
+                            <button onclick="toggleFavorite(${item.id}, event)" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-950/60 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 transition">
+                                <i class="${isFav ? 'fa-solid text-red-500' : 'fa-regular'} fa-heart text-xs sm:text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-3 sm:p-4 flex flex-col flex-grow justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-0.5 sm:mb-1">
+                                <span class="text-base sm:text-lg font-black ${isSold ? 'text-gray-400 line-through' : 'text-lime-600 dark:text-lime-400'}">¥${item.price}</span>
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400">${item.condition || 'Good'}</span>
+                            </div>
+                            <h4 class="font-bold text-gray-900 dark:text-white text-xs sm:text-sm line-clamp-2 mb-1 leading-tight">${item.title}</h4>
+                        </div>
+                        <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 dark:border-slate-800/80">
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400 flex items-center">
+                                <i class="fa-solid fa-location-dot mr-1 text-red-500"></i> ${item.location}
+                            </p>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterCategory(category) {
+            activeCategory = category;
+            
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                if (btn.innerText.includes(category) || (category === 'All' && btn.innerText.includes('All'))) {
+                    btn.className = "cat-btn bg-lime-400 text-slate-950 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold whitespace-nowrap shadow-xs flex-shrink-0 transition-colors";
+                } else {
+                    btn.className = "cat-btn bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-colors";
+                }
+            });
+
+            filterItems();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            filterItems();
+        }
+
+        function filterItems() {
+            const queryInput = document.getElementById('searchInput');
+            const query = queryInput.value.toLowerCase();
+            
+            if (query.length > 0) {
+                document.getElementById('clearSearchBtn').classList.remove('hidden');
+            } else {
+                document.getElementById('clearSearchBtn').classList.add('hidden');
+            }
+
+            const filtered = items.filter(item => {
+                let matchesCategory = true;
+                if (activeCategory === 'Saved') {
+                    matchesCategory = savedItemIds.includes(item.id);
+                } else if (activeCategory === 'Under50') {
+                    matchesCategory = item.price <= 50;
+                } else if (activeCategory !== 'All') {
+                    matchesCategory = item.category === activeCategory;
+                }
+
+                const matchesQuery = item.title.toLowerCase().includes(query) || (item.desc && item.desc.toLowerCase().includes(query)) || (item.location && item.location.toLowerCase().includes(query));
+                return matchesCategory && matchesQuery;
+            });
+
+            renderItems(filtered);
+        }
+
+        function openItemDetail(id) {
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+
+            activeDetailItemId = id;
+            const isSold = item.status === 'sold';
+
+            document.getElementById('modalImg').src = item.image;
+            document.getElementById('modalCategory').innerText = item.category;
+            document.getElementById('modalCondition').innerText = item.condition || 'Good';
+            document.getElementById('modalTitle').innerText = item.title;
+            document.getElementById('modalPrice').innerText = `¥${item.price}`;
+            document.getElementById('modalLocationText').innerText = item.location;
+            document.getElementById('modalDesc').innerText = item.desc || 'No description provided.';
+            
+            document.getElementById('modalWeChat').innerText = item.wechat || 'No ID provided (Use QR)';
+            
+            const modalSoldOverlay = document.getElementById('modalSoldOverlay');
+            const toggleSoldBtn = document.getElementById('toggleSoldBtn');
+            const contactBox = document.getElementById('modalContactBox');
+
+            if (isSold) {
+                modalSoldOverlay.classList.remove('hidden');
+                toggleSoldBtn.innerText = "Mark as Available";
+                toggleSoldBtn.className = "bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold px-3 py-2 rounded-xl transition";
+                contactBox.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                modalSoldOverlay.classList.add('hidden');
+                toggleSoldBtn.innerText = "Mark as Sold";
+                toggleSoldBtn.className = "bg-slate-900 dark:bg-slate-950 text-white hover:bg-slate-800 text-xs font-bold px-3 py-2 rounded-xl transition";
+                contactBox.classList.remove('opacity-50', 'pointer-events-none');
+            }
+
+            const qrContainer = document.getElementById('qrContainer');
+            if (item.wechat_qr && item.wechat_qr.trim() !== '') {
+                document.getElementById('modalQrImg').src = item.wechat_qr;
+                qrContainer.classList.remove('hidden');
+            } else {
+                qrContainer.classList.add('hidden');
+            }
+
+            openModal('detailModal');
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+            document.body.style.overflow = '';
+            if (modalId === 'detailModal') activeDetailItemId = null;
+        }
+
+        async function handlePostItem(event) {
+            event.preventDefault();
+
+            const pin = document.getElementById('postPin').value.trim();
+            const wechat = document.getElementById('postWeChat').value.trim();
+            const imgFileInput = document.getElementById('postImgFile');
+            const qrFileInput = document.getElementById('postWeChatQrFile');
+
+            if (pin.length !== 4 || isNaN(pin)) {
+                showToast('Please enter a valid 4-digit numeric PIN!');
+                return;
+            }
+
+            if (!imgFileInput.files || !imgFileInput.files[0]) {
+                showToast('Please select a photo of your item to upload!');
+                return;
+            }
+
+            const readFileAsDataURL = (file) => new Promise((resolve) => {
+                if (!file) return resolve('');
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+
+            const [imgDataUrl, qrDataUrl] = await Promise.all([
+                readFileAsDataURL(imgFileInput.files[0]),
+                readFileAsDataURL(qrFileInput.files && qrFileInput.files[0])
+            ]);
+
+            if (!wechat && !qrDataUrl) {
+                showToast('Provide either a WeChat ID or a QR Code photo!');
+                return;
+            }
+
+            const { error } = await supabase.from('items').insert([
+                {
+                    title: document.getElementById('postTitle').value,
+                    price: parseFloat(document.getElementById('postPrice').value),
+                    category: document.getElementById('postCategory').value,
+                    condition: document.getElementById('postCondition').value,
+                    location: document.getElementById('postLocation').value,
+                    pin: pin,
+                    desc: document.getElementById('postDesc').value,
+                    wechat: wechat,
+                    wechat_qr: qrDataUrl,
+                    image: imgDataUrl,
+                    status: "available"
+                }
+            ]);
+
+            if (error) {
+                showToast('Error saving to live database');
+                console.error(error);
+                return;
+            }
+
+            closeModal('postModal');
+            document.getElementById('postForm').reset();
+            showToast('Listing published live!');
+            await fetchItems();
+            scrollToMarket();
+        }
+
+        // Initial Render & Database Fetch
+        updateFavBadge();
+        fetchItems();
+    </script>
+</body>
+</html>
