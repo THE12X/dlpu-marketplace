@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="light">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -24,7 +24,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -66,7 +66,7 @@
 
                 <!-- Theme Toggle Button -->
                 <button onclick="toggleTheme()" id="themeBtn" aria-label="Toggle dark mode" class="w-10 h-10 rounded-2xl flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-lime-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition shadow-xs">
-                    <i id="themeIcon" class="fa-solid fa-moon text-base"></i>
+                    <i id="themeIcon" class="fa-solid fa-sun text-base"></i>
                 </button>
 
                 <!-- Post Item Button -->
@@ -357,10 +357,18 @@
 
     <!-- JavaScript Application Logic -->
     <script>
-        // Pre-filled Supabase Live Credentials
         const SUPABASE_URL = "https://wwmaimwwthgnrenphvzh.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_Zt-gkMUe4-VXXX7Kk9bQGw_BIQ0--Wg";
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Fault-tolerant Supabase Initialization
+        let supabaseClient = null;
+        try {
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (e) {
+            console.warn("Supabase CDN client initialization failed:", e);
+        }
 
         const MASTER_ADMIN_KEY = "dlpu2026";
 
@@ -369,21 +377,33 @@
         let pendingPinAction = null;
         let items = [];
 
-        // Fetch live items directly from Supabase DB
+        // Fetch items directly from Supabase DB with local fallback
         async function fetchItems() {
-            const { data, error } = await supabase
-                .from('items')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.error("Error fetching items:", error);
-                showToast("Could not load live listings");
+            if (!supabaseClient) {
+                filterItems();
                 return;
             }
 
-            items = data || [];
-            filterItems();
+            try {
+                const { data, error } = await supabaseClient
+                    .from('items')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) {
+                    console.error("Error fetching items:", error);
+                    filterItems();
+                    return;
+                }
+
+                if (data) {
+                    items = data;
+                }
+                filterItems();
+            } catch (err) {
+                console.error("Network exception fetching items:", err);
+                filterItems();
+            }
         }
 
         function toggleAdminMode() {
@@ -446,19 +466,23 @@
 
         async function executeAction(action, itemId) {
             if (action === 'delete') {
-                const { error } = await supabase
-                    .from('items')
-                    .delete()
-                    .eq('id', itemId);
+                if (supabaseClient) {
+                    const { error } = await supabaseClient
+                        .from('items')
+                        .delete()
+                        .eq('id', itemId);
 
-                if (error) {
-                    showToast('Failed to delete item from database');
-                    console.error(error);
-                    return;
+                    if (error) {
+                        showToast('Failed to delete item from database');
+                        console.error(error);
+                        return;
+                    }
+                } else {
+                    items = items.filter(i => i.id !== itemId);
                 }
 
                 closeModal('detailModal');
-                showToast('Listing deleted live!');
+                showToast('Listing deleted successfully!');
                 await fetchItems();
             } else if (action === 'toggleSold') {
                 const targetItem = items.find(i => i.id === itemId);
@@ -466,15 +490,19 @@
 
                 const newStatus = targetItem.status === 'sold' ? 'available' : 'sold';
 
-                const { error } = await supabase
-                    .from('items')
-                    .update({ status: newStatus })
-                    .eq('id', itemId);
+                if (supabaseClient) {
+                    const { error } = await supabaseClient
+                        .from('items')
+                        .update({ status: newStatus })
+                        .eq('id', itemId);
 
-                if (error) {
-                    showToast('Failed to update status in database');
-                    console.error(error);
-                    return;
+                    if (error) {
+                        showToast('Failed to update status in database');
+                        console.error(error);
+                        return;
+                    }
+                } else {
+                    targetItem.status = newStatus;
                 }
 
                 showToast(newStatus === 'sold' ? 'Item marked as SOLD' : 'Item marked as Available');
@@ -545,14 +573,13 @@
 
         (function initTheme() {
             const savedTheme = localStorage.getItem('theme');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             
-            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
-                document.documentElement.classList.add('dark');
-                document.getElementById('themeIcon').className = "fa-solid fa-sun text-base";
-            } else {
+            if (savedTheme === 'light') {
                 document.documentElement.classList.remove('dark');
                 document.getElementById('themeIcon').className = "fa-solid fa-moon text-base";
+            } else {
+                document.documentElement.classList.add('dark');
+                document.getElementById('themeIcon').className = "fa-solid fa-sun text-base";
             }
         })();
 
@@ -794,36 +821,40 @@
                 return;
             }
 
-            const { error } = await supabase.from('items').insert([
-                {
-                    title: document.getElementById('postTitle').value,
-                    price: parseFloat(document.getElementById('postPrice').value),
-                    category: document.getElementById('postCategory').value,
-                    condition: document.getElementById('postCondition').value,
-                    location: document.getElementById('postLocation').value,
-                    pin: pin,
-                    desc: document.getElementById('postDesc').value,
-                    wechat: wechat,
-                    wechat_qr: qrDataUrl,
-                    image: imgDataUrl,
-                    status: "available"
-                }
-            ]);
+            const newItem = {
+                id: Date.now(),
+                title: document.getElementById('postTitle').value,
+                price: parseFloat(document.getElementById('postPrice').value),
+                category: document.getElementById('postCategory').value,
+                condition: document.getElementById('postCondition').value,
+                location: document.getElementById('postLocation').value,
+                pin: pin,
+                desc: document.getElementById('postDesc').value,
+                wechat: wechat,
+                wechat_qr: qrDataUrl,
+                image: imgDataUrl,
+                status: "available"
+            };
 
-            if (error) {
-                showToast('Error saving to live database');
-                console.error(error);
-                return;
+            if (supabaseClient) {
+                const { error } = await supabaseClient.from('items').insert([newItem]);
+                if (error) {
+                    showToast('Error saving to live database');
+                    console.error(error);
+                    return;
+                }
+            } else {
+                items.unshift(newItem);
             }
 
             closeModal('postModal');
             document.getElementById('postForm').reset();
-            showToast('Listing published live!');
+            showToast('Listing published successfully!');
             await fetchItems();
             scrollToMarket();
         }
 
-        // Initial Render & Database Fetch
+        // Initial Render & Fetch
         updateFavBadge();
         fetchItems();
     </script>
